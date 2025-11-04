@@ -17,20 +17,18 @@ void main()
 {
     vec3 pos = aPos;
 
-    float freq = 4.0;
-    float amp = 0.1; 
-    float speed = 2.0;
+    float wave_x = sin(iTime * 2.5 + aPos.x * 3.0) * 0.1;
+    
+    float wave_y = cos(iTime * 1.5 + aPos.y * 5.0) * 0.05;
 
-    float attenuation = pow(aPos.x, 2.0); 
-    float wave = sin(aPos.x * freq + iTime * speed) * amp * attenuation;
-
-    pos.y += wave; 
-    pos.z += wave * 0.3; 
-
-    FragPos = vec3(model * vec4(pos, 1.0));
+    float displacement = wave_x + wave_y;
+    
+    pos.z += displacement;
 
     Normal = mat3(transpose(inverse(model))) * aNormal;
 
+    FragPos = vec3(model * vec4(pos, 1.0));
+    
     TexCoord = aTexCoord;
 
     gl_Position = projection * view * vec4(FragPos, 1.0);

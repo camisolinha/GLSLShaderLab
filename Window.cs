@@ -377,21 +377,23 @@ namespace GLSLShaderLab
                     else
                         RenderDirect();
                 }
-                else
-                {
-                    if (_useBuffers)
-                        RenderWithBuffers3D();
-                    else
+                        else
                     {
-                        var model = Matrix4.CreateRotationY(MathHelper.DegreesToRadians(_rotationY));
-                        var view = Matrix4.LookAt(_cameraPos, _cameraPos + _cameraFront, _cameraUp);
-                        var projection = Matrix4.CreatePerspectiveFieldOfView(MathHelper.DegreesToRadians(_fov), Size.X / (float)Size.Y, 0.1f, 100.0f);
-                        _shader.SetMatrix4("model", model);
-                        _shader.SetMatrix4("view", view);
-                        _shader.SetMatrix4("projection", projection);
-                        _model?.Render();
+                        if (_useBuffers)
+                            RenderWithBuffers3D();
+                        else
+                        {
+                            // Apenas rotação animada em Y (remoção da rotação fixa em X)
+                            var model = Matrix4.CreateRotationY(MathHelper.DegreesToRadians(_rotationY));
+                            
+                            var view = Matrix4.LookAt(_cameraPos, _cameraPos + _cameraFront, _cameraUp);
+                            var projection = Matrix4.CreatePerspectiveFieldOfView(MathHelper.DegreesToRadians(_fov), Size.X / (float)Size.Y, 0.1f, 100.0f);
+                            _shader.SetMatrix4("model", model);
+                            _shader.SetMatrix4("view", view);
+                            _shader.SetMatrix4("projection", projection);
+                            _model?.Render();
+                        }
                     }
-                }
             }
 
             SwapBuffers();
@@ -403,7 +405,9 @@ namespace GLSLShaderLab
 
             _shader!.Use();
             SetCommonUniforms(_shader!);
-
+            var model = Matrix4.CreateRotationY(MathHelper.DegreesToRadians(_rotationY));
+            
+            var view = Matrix4.LookAt(_cameraPos, _cameraPos + _cameraFront, _cameraUp);
             // Bind previous frame como iChannel0
             _bufferManager.BindBuffersForReading(_shader);
 

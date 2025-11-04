@@ -11,35 +11,31 @@ uniform vec3 viewPos;
 
 vec3 stripeColor(float y) {
     if (y < 0.33)
-        return vec3(0.7, 0.0, 0.0);   
+        return vec3(0.7, 0.0, 0.0);    
     else if (y < 0.66)
-        return vec3(0.7, 0.4, 0.0);   
+        return vec3(0.7, 0.4, 0.0);    
     else
-        return vec3(0.5);           
+        return vec3(0.5);          
 }
 
 void main()
 {
-    float wave = cos(iTime + TexCoord.x * 20.0) * 0.05;
-    float y = TexCoord.y + wave;
+    vec3 baseColor = stripeColor(TexCoord.y); 
 
-    vec3 baseColor = stripeColor(y);
+    vec3 norm = normalize(-Normal); 
+    
 
-    if (TexCoord.x < 0.0 || TexCoord.x > 1.0 || y < 0.0 || y > 1.0)
-        discard;
-
-    vec3 norm = normalize(Normal);
     vec3 lightDir = normalize(lightPos - FragPos);
-
     float diff = max(dot(norm, lightDir), 0.0);
 
     vec3 viewDir = normalize(viewPos - FragPos);
     vec3 reflectDir = reflect(-lightDir, norm);
     float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32);
 
-    vec3 ambient = 0.2 * baseColor;
+    vec3 ambient = 0.9 * baseColor;
     vec3 diffuse = diff * baseColor;
-    vec3 specular = spec * vec3(1.0);
+    vec3 specular = spec * vec3(6.0);
 
+    // Cor Final
     fragColor = vec4(ambient + diffuse + specular, 1.0);
 }
