@@ -15,9 +15,11 @@ namespace GLSLShaderLab
 {
     public class Window : GameWindow
     {
-        private Shader _shader;
-        private Model _model;
-        private Shader _copyShader;
+        private Shader _shader = null!;
+        private Model _model = null!;
+        private Shader _copyShader = null!;
+        private BufferManager _bufferManager = null!;
+
         private float _time;
         private ShaderSelector.ShaderInfo _selectedShader;
         private ModelSelector.ModelInfo _selectedModel;
@@ -26,35 +28,29 @@ namespace GLSLShaderLab
         private int _currentShaderIndex;
         private int _currentModelIndex;
         private bool _showHelp;
-        private BufferManager _bufferManager;
         private bool _useBuffers = false;
 
-        // Camera properties
-        private Vector3 _cameraPos = new Vector3(0.0f, 0.0f, 3.0f);
-        private Vector3 _cameraFront = new Vector3(0.0f, 0.0f, -1.0f);
-        private Vector3 _cameraUp = new Vector3(0.0f, 1.0f, 0.0f);
+        private Vector3 _cameraPos = new(0.0f, 0.0f, 3.0f);
+        private Vector3 _cameraFront = new(0.0f, 0.0f, -1.0f);
+        private Vector3 _cameraUp = new(0.0f, 1.0f, 0.0f);
         private float _yaw = -90.0f;
         private float _pitch = 0.0f;
         private float _fov = 45.0f;
         private bool _firstMove = true;
         private Vector2 _lastPos;
 
-        // Model transformation
         private float _rotationY = 0.0f;
 
-        // Fullscreen quad
         private int _vao;
         private int _vbo;
         private int _ebo;
 
-        // Render mode
         private enum RenderMode { Fullscreen2D, Model3D }
         private RenderMode _renderMode = RenderMode.Fullscreen2D;
 
-        // Textures
         private List<int> _loadedTextures = new();
         private List<string> _loadedTextureNames = new();
-        private const string TextureFolderName = "textures"; // <- use plural
+        private const string TextureFolderName = "textures";
         private string _resolvedTextureDir = "";
 
         public Window(int width, int height, string title, ShaderSelector.ShaderInfo selectedShader, ModelSelector.ModelInfo selectedModel)
@@ -87,12 +83,10 @@ namespace GLSLShaderLab
             GL.ClearColor(0.1f, 0.1f, 0.1f, 1.0f);
             GL.Enable(EnableCap.DepthTest);
 
-            // Fullscreen quad
             _vao = GL.GenVertexArray();
             GL.BindVertexArray(_vao);
 
             float[] quadVertices = {
-                // pos       // texcoord
                 -1.0f, -1.0f, 0.0f, 0.0f,
                  1.0f, -1.0f, 1.0f, 0.0f,
                  1.0f,  1.0f, 1.0f, 1.0f,
@@ -115,16 +109,14 @@ namespace GLSLShaderLab
             GL.EnableVertexAttribArray(1);
             GL.VertexAttribPointer(1, 2, VertexAttribPointerType.Float, false, stride, 2 * sizeof(float));
 
-            // Buffer manager
             _bufferManager = new BufferManager(Size.X, Size.Y);
 
             try { _copyShader = new Shader("Shaders/copy.vert", "Shaders/copy.frag"); }
             catch (Exception ex) { Console.WriteLine($"Erro ao carregar copy shader: {ex.Message}"); }
-
-            LoadShader(_selectedShader);
+            
             LoadModel(_selectedModel);
+            LoadShader(_selectedShader);
 
-            // Resolve e carrega texturas a partir de "textures"
             _resolvedTextureDir = ResolveTexturesFolder();
             LoadTexturesFromFolder(_resolvedTextureDir, includeSubdirs: false);
 
@@ -140,10 +132,8 @@ namespace GLSLShaderLab
             Console.WriteLine(" H   : Mostrar/ocultar ajuda + listar texturas");
             Console.WriteLine(" F5  : Recarregar texturas da pasta");
             Console.WriteLine(" ESC : Sair");
-            Console.WriteLine($"Texturas: pasta resolvida para: {_resolvedTextureDir}");
         }
 
-        // Resolve possíveis locais da pasta textures
         private string ResolveTexturesFolder()
         {
             var candidates = new List<string>
@@ -157,70 +147,41 @@ namespace GLSLShaderLab
             foreach (var c in candidates)
                 if (Directory.Exists(c)) return c;
 
-            // fallback: se não existir, retorna caminho no diretório atual
             return Path.Combine(Directory.GetCurrentDirectory(), TextureFolderName);
         }
 
-        // Libera e limpa a lista de texturas carregadas
         private void ReleaseLoadedTextures()
         {
             foreach (var tex in _loadedTextures)
-            {
                 if (tex != 0) GL.DeleteTexture(tex);
-            }
             _loadedTextures.Clear();
             _loadedTextureNames.Clear();
         }
 
-        // Carrega todas as texturas da pasta especificada
         private void LoadTexturesFromFolder(string folderPath, bool includeSubdirs = false)
         {
-            // Evita vazamento: libera texturas anteriores antes de recarregar
             ReleaseLoadedTextures();
-
             if (!Directory.Exists(folderPath))
             {
                 Console.WriteLine($"[TEXTURE] Pasta não encontrada: {folderPath}");
                 return;
             }
 
-            var searchOption = includeSubdirs ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
-
-            // extensões suportadas (case-insensitive)
             var allowed = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             { ".png", ".jpg", ".jpeg", ".bmp", ".tga" };
 
-            int found = 0, ok = 0, fail = 0;
-
-            foreach (var file in Directory.EnumerateFiles(folderPath, "*.*", searchOption))
+            foreach (var file in Directory.EnumerateFiles(folderPath, "*.*", includeSubdirs ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly))
             {
-                var ext = Path.GetExtension(file);
-                if (!allowed.Contains(ext)) continue;
-
-                found++;
+                if (!allowed.Contains(Path.GetExtension(file))) continue;
                 int texId = LoadTexture(file);
                 if (texId != 0)
                 {
                     _loadedTextures.Add(texId);
                     _loadedTextureNames.Add(Path.GetFileName(file));
-                    ok++;
                 }
-                else fail++;
-            }
-
-            Console.WriteLine($"[TEXTURE] varridos: {found}, carregados: {ok}, falhas: {fail}");
-            if (ok > 0)
-            {
-                for (int i = 0; i < _loadedTextureNames.Count; i++)
-                    Console.WriteLine($"  texture{i}: {_loadedTextureNames[i]}");
-            }
-            else
-            {
-                Console.WriteLine("[TEXTURE] Nenhuma textura carregada.");
             }
         }
 
-        // Carrega uma textura de arquivo usando ImageSharp
         private int LoadTexture(string path)
         {
             try
@@ -232,22 +193,16 @@ namespace GLSLShaderLab
 
                 int texId = GL.GenTexture();
                 GL.BindTexture(TextureTarget.Texture2D, texId);
-
-                // Alinhamento para imagens sem padding
                 GL.PixelStore(PixelStoreParameter.UnpackAlignment, 1);
 
                 GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.Rgba,
                     image.Width, image.Height, 0, PixelFormat.Rgba, PixelType.UnsignedByte, pixels);
 
-                // Filtros + mipmaps
                 GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.LinearMipmapLinear);
                 GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Linear);
                 GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.Repeat);
                 GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)TextureWrapMode.Repeat);
-
                 GL.GenerateMipmap(GenerateMipmapTarget.Texture2D);
-
-                Console.WriteLine($"[TEXTURE] Sucesso: {Path.GetFileName(path)} {image.Width}x{image.Height} (ID: {texId})");
 
                 GL.BindTexture(TextureTarget.Texture2D, 0);
                 return texId;
@@ -261,20 +216,21 @@ namespace GLSLShaderLab
 
         private void SetCommonUniforms(Shader shader)
         {
+            if (shader == null) return; // 🔒 evita CS8604
+
             shader.SetFloat("iTime", _time);
             shader.SetVector2("iResolution", new Vector2(Size.X, Size.Y));
             shader.SetVector2("iMouse", new Vector2(MouseState.X, Size.Y - MouseState.Y));
             shader.SetInt("iMouseClick", MouseState.IsButtonDown(MouseButton.Left) ? 1 : 0);
             shader.SetVector3("viewPos", _cameraPos);
 
-            // Descobre quantas texture units temos e limita o bind
             GL.GetInteger(GetPName.MaxCombinedTextureImageUnits, out int maxUnits);
-            int startUnit = 1; // Texture1 em diante (Texture0 reservado p/ iChannel0)
+            int startUnit = 1;
             int canBind = Math.Min(_loadedTextures.Count, Math.Max(0, maxUnits - startUnit));
 
             for (int i = 0; i < canBind; i++)
             {
-                int unit = startUnit + i; // Texture1, 2, ...
+                int unit = startUnit + i;
                 GL.ActiveTexture(TextureUnit.Texture0 + unit);
                 GL.BindTexture(TextureTarget.Texture2D, _loadedTextures[i]);
                 shader.SetInt($"texture{i}", unit);
@@ -445,8 +401,8 @@ namespace GLSLShaderLab
         {
             _bufferManager.BindCurrentBufferForWriting();
 
-            _shader?.Use();
-            SetCommonUniforms(_shader);
+            _shader!.Use();
+            SetCommonUniforms(_shader!);
 
             // Bind previous frame como iChannel0
             _bufferManager.BindBuffersForReading(_shader);
@@ -490,8 +446,8 @@ namespace GLSLShaderLab
         {
             _bufferManager.BindCurrentBufferForWriting();
 
-            _shader?.Use();
-            SetCommonUniforms(_shader);
+            _shader!.Use();
+            SetCommonUniforms(_shader!);
 
             var model = Matrix4.CreateRotationY(MathHelper.DegreesToRadians(_rotationY));
             var view = Matrix4.LookAt(_cameraPos, _cameraPos + _cameraFront, _cameraUp);
